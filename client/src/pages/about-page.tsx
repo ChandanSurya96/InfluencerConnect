@@ -73,7 +73,7 @@ export default function AboutPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7 }}
         >
-          <h1 className="text-5xl md:text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-indigo-600 mb-4">
+          <h1 className="text-5xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-transparent bg-clip-text">
             CollabMatch
           </h1>
           <p className="text-xl md:text-2xl text-gray-700 mb-8">
@@ -216,7 +216,7 @@ export default function AboutPage() {
       <footer className="container mx-auto px-4 py-8 border-t border-gray-200 mt-16">
         <div className="flex flex-col md:flex-row justify-between items-center">
           <div className="mb-4 md:mb-0">
-            <p className="text-lg font-semibold bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-indigo-600">
+            <p className="text-lg font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 text-transparent bg-clip-text">
               CollabMatch
             </p>
           </div>

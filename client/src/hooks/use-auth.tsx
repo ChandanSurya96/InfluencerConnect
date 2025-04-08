@@ -48,10 +48,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
-      return await res.json();
+      console.log("Login attempt with:", {...credentials, password: "******"});
+      try {
+        const res = await apiRequest("POST", "/api/login", credentials);
+        const userData = await res.json();
+        console.log("Login successful, user data:", {...userData, password: "******"});
+        return userData;
+      } catch (error) {
+        console.error("Login error in mutationFn:", error);
+        throw error;
+      }
     },
     onSuccess: (user: SelectUser) => {
+      console.log("Login onSuccess triggered with user:", {...user, password: "******"});
       queryClient.setQueryData(["/api/user"], user);
       queryClient.invalidateQueries({ queryKey: ["/api/user/profile"] });
       toast({
@@ -60,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     },
     onError: (error: Error) => {
+      console.error("Login onError triggered:", error);
       toast({
         title: "Login failed",
         description: error.message,
@@ -70,17 +80,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const registerMutation = useMutation({
     mutationFn: async (credentials: InsertUser) => {
-      const res = await apiRequest("POST", "/api/register", credentials);
-      return await res.json();
+      console.log("Register attempt with:", {...credentials, password: "******"});
+      try {
+        const res = await apiRequest("POST", "/api/register", credentials);
+        const userData = await res.json();
+        console.log("Registration successful, user data:", {...userData, password: "******"});
+        return userData;
+      } catch (error) {
+        console.error("Registration error in mutationFn:", error);
+        throw error;
+      }
     },
     onSuccess: (user: SelectUser) => {
+      console.log("Register onSuccess triggered with user:", {...user, password: "******"});
       queryClient.setQueryData(["/api/user"], user);
+      queryClient.invalidateQueries({ queryKey: ["/api/user/profile"] });
       toast({
         title: "Registration successful",
         description: `Welcome, ${user.name}!`,
       });
     },
     onError: (error: Error) => {
+      console.error("Registration onError triggered:", error);
       toast({
         title: "Registration failed",
         description: error.message,
