@@ -10,8 +10,15 @@ import { UserRole } from "@shared/schema";
 
 export default function DiscoverPage() {
   const { user } = useAuth();
+  const defaultType = user?.role === UserRole.INFLUENCER ? "brands" : "influencers";
   const [searchFilters, setSearchFilters] = useState<SearchFiltersType>({
-    type: user?.role === UserRole.INFLUENCER ? "brands" : "influencers"
+    type: defaultType,
+    category: defaultType === "influencers" ? "all_categories" : undefined,
+    platform: defaultType === "influencers" ? "all_platforms" : undefined,
+    audienceSize: defaultType === "influencers" ? "any_size" : undefined,
+    industry: defaultType === "brands" ? "all_industries" : undefined,
+    budget: "any_budget",
+    location: "worldwide"
   });
   
   // Get the appropriate endpoint based on filters
@@ -24,15 +31,36 @@ export default function DiscoverPage() {
     const params = new URLSearchParams();
     
     if (searchFilters.type === "influencers") {
-      if (searchFilters.category) params.append("category", searchFilters.category);
-      if (searchFilters.platform) params.append("platform", searchFilters.platform);
-      if (searchFilters.audienceSize) params.append("audienceSize", searchFilters.audienceSize);
+      // Only add category parameter if it's not the "all" value
+      if (searchFilters.category && searchFilters.category !== "all_categories") {
+        params.append("category", searchFilters.category);
+      }
+      
+      // Only add platform parameter if it's not the "all" value
+      if (searchFilters.platform && searchFilters.platform !== "all_platforms") {
+        params.append("platform", searchFilters.platform);
+      }
+      
+      // Only add audience size parameter if it's not the "any" value
+      if (searchFilters.audienceSize && searchFilters.audienceSize !== "any_size") {
+        params.append("audienceSize", searchFilters.audienceSize);
+      }
     } else {
-      if (searchFilters.industry) params.append("industry", searchFilters.industry);
+      // Only add industry parameter if it's not the "all" value
+      if (searchFilters.industry && searchFilters.industry !== "all_industries") {
+        params.append("industry", searchFilters.industry);
+      }
     }
     
-    if (searchFilters.budget) params.append("budget", searchFilters.budget);
-    if (searchFilters.location) params.append("location", searchFilters.location);
+    // Only add budget parameter if it's not the "any" value
+    if (searchFilters.budget && searchFilters.budget !== "any_budget") {
+      params.append("budget", searchFilters.budget);
+    }
+    
+    // Only add location parameter if it's not the "worldwide" value
+    if (searchFilters.location && searchFilters.location !== "worldwide") {
+      params.append("location", searchFilters.location);
+    }
     
     return params.toString();
   };
@@ -72,7 +100,10 @@ export default function DiscoverPage() {
         </div>
       </div>
 
-      <SearchFilters onFilterChange={handleFilterChange} />
+      <SearchFilters 
+        onFilterChange={handleFilterChange}
+        initialFilters={searchFilters}
+      />
 
       <div className="space-y-4">
         <div className="flex justify-between items-center">

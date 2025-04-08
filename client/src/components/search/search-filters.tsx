@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -18,6 +18,7 @@ import { Filter, Search } from "lucide-react";
 
 export interface SearchFiltersProps {
   onFilterChange: (filters: SearchFilters) => void;
+  initialFilters?: SearchFilters;
 }
 
 export interface SearchFilters {
@@ -30,13 +31,52 @@ export interface SearchFilters {
   industry?: string;
 }
 
-export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
-  const [filters, setFilters] = useState<SearchFilters>({
+export default function SearchFilters({ onFilterChange, initialFilters }: SearchFiltersProps) {
+  const defaultFilters: SearchFilters = {
     type: "influencers",
-  });
+    category: "all_categories",
+    platform: "all_platforms",
+    audienceSize: "any_size",
+    budget: "any_budget",
+    location: "worldwide",
+  };
+  
+  const [filters, setFilters] = useState<SearchFilters>(initialFilters || defaultFilters);
+  
+  // Update filters when initialFilters changes
+  useEffect(() => {
+    if (initialFilters) {
+      setFilters(initialFilters);
+    }
+  }, [initialFilters]);
 
   const handleTypeChange = (type: "influencers" | "brands") => {
-    const newFilters = { ...filters, type };
+    let newFilters: SearchFilters;
+    
+    if (type === "influencers") {
+      newFilters = {
+        type,
+        category: "all_categories",
+        platform: "all_platforms",
+        audienceSize: "any_size",
+        budget: "any_budget",
+        location: "worldwide",
+        // Clear brand-specific fields
+        industry: undefined
+      };
+    } else {
+      newFilters = {
+        type,
+        industry: "all_industries",
+        budget: "any_budget",
+        location: "worldwide",
+        // Clear influencer-specific fields
+        category: undefined,
+        platform: undefined,
+        audienceSize: undefined
+      };
+    }
+    
     setFilters(newFilters);
     onFilterChange(newFilters);
   };
@@ -48,9 +88,17 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
   };
 
   const handleResetFilters = () => {
-    const newFilters = { type: filters.type };
-    setFilters(newFilters);
-    onFilterChange(newFilters);
+    const defaultValues = {
+      type: filters.type,
+      category: filters.type === "influencers" ? "all_categories" : undefined,
+      platform: filters.type === "influencers" ? "all_platforms" : undefined,
+      audienceSize: filters.type === "influencers" ? "any_size" : undefined,
+      industry: filters.type === "brands" ? "all_industries" : undefined,
+      budget: "any_budget",
+      location: "worldwide"
+    };
+    setFilters(defaultValues);
+    onFilterChange(defaultValues);
   };
 
   const handleApplyFilters = () => {
@@ -94,7 +142,7 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Categories</SelectItem>
+                  <SelectItem value="all_categories">All Categories</SelectItem>
                   {Object.values(CategoryType).map((category) => (
                     <SelectItem key={category} value={category}>
                       {category}
@@ -113,7 +161,7 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
                   <SelectValue placeholder="All Platforms" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Platforms</SelectItem>
+                  <SelectItem value="all_platforms">All Platforms</SelectItem>
                   {Object.values(PlatformType).map((platform) => (
                     <SelectItem key={platform} value={platform}>
                       {platform}
@@ -135,7 +183,7 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
                   <SelectValue placeholder="All Industries" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Industries</SelectItem>
+                  <SelectItem value="all_industries">All Industries</SelectItem>
                   {Object.values(IndustryType).map((industry) => (
                     <SelectItem key={industry} value={industry}>
                       {industry}
@@ -154,7 +202,7 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
                   <SelectValue placeholder="Worldwide" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Worldwide</SelectItem>
+                  <SelectItem value="worldwide">Worldwide</SelectItem>
                   <SelectItem value="us">United States</SelectItem>
                   <SelectItem value="europe">Europe</SelectItem>
                   <SelectItem value="asia">Asia</SelectItem>
@@ -179,7 +227,7 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
                   <SelectValue placeholder="Any Size" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any Size</SelectItem>
+                  <SelectItem value="any_size">Any Size</SelectItem>
                   {Object.values(AudienceSize).map((size) => (
                     <SelectItem key={size} value={size}>
                       {size}
@@ -200,7 +248,7 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
               <SelectValue placeholder="Any Budget" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Any Budget</SelectItem>
+              <SelectItem value="any_budget">Any Budget</SelectItem>
               {Object.values(BudgetRange).map((budget) => (
                 <SelectItem key={budget} value={budget}>
                   {budget}
@@ -219,7 +267,7 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
               <SelectValue placeholder="Worldwide" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Worldwide</SelectItem>
+              <SelectItem value="worldwide">Worldwide</SelectItem>
               <SelectItem value="us">United States</SelectItem>
               <SelectItem value="europe">Europe</SelectItem>
               <SelectItem value="asia">Asia</SelectItem>
