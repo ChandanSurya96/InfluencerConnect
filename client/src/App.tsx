@@ -2,6 +2,7 @@ import { Switch, Route, useLocation } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
+import AboutPage from "@/pages/about-page";
 import HomePage from "@/pages/home-page";
 import ProfilePage from "@/pages/profile-page";
 import DiscoverPage from "@/pages/discover-page";
@@ -16,11 +17,13 @@ const AppContent = () => {
   const [location] = useLocation();
   const { user } = useAuth();
   
-  // Don't show layout on auth page
-  if (location === "/auth") {
+  // Don't show layout on auth page or about page
+  if (location === "/auth" || location === "/about" || location === "/") {
     return (
       <>
         <Switch>
+          <Route path="/" component={AboutPage} />
+          <Route path="/about" component={AboutPage} />
           <Route path="/auth" component={AuthPage} />
           <Route component={NotFound} />
         </Switch>
@@ -38,12 +41,14 @@ const AppContent = () => {
         {/* Main Content */}
         <main className="flex-1 overflow-auto bg-gray-50 pb-16 lg:pb-0">
           <Switch>
-            <ProtectedRoute path="/" component={HomePage} />
+            <ProtectedRoute path="/home" component={HomePage} />
             <ProtectedRoute path="/profile" component={ProfilePage} />
             <ProtectedRoute path="/discover" component={DiscoverPage} />
             <ProtectedRoute path="/messages" component={MessagesPage} />
             <ProtectedRoute path="/messages/:userId" component={MessagesPage} />
             <ProtectedRoute path="/admin" component={AdminPage} />
+            <Route path="/" component={AboutPage} />
+            <Route path="/about" component={AboutPage} />
             <Route component={NotFound} />
           </Switch>
         </main>
