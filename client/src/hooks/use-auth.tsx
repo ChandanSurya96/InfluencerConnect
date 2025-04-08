@@ -4,50 +4,46 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { insertUserSchema, User as SelectUser, UserRole } from "@shared/schema";
+import { insertUserSchema, User as SelectUser, InsertUser, UserWithProfile } from "@shared/schema";
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { z } from "zod";
-import { useLocation } from "wouter";
 
-// Define types for auth-related operations
 type AuthContextType = {
   user: SelectUser | null;
+  userWithProfile: UserWithProfile | null;
   isLoading: boolean;
+  isProfileLoading: boolean;
   error: Error | null;
   loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<SelectUser, Error, RegisterData>;
+  registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
 };
 
-type LoginData = {
-  username: string;
-  password: string;
-};
-
-// Extended User schema for registration
-const registerSchema = insertUserSchema.extend({
-  confirmPassword: z.string(),
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"]
-});
-
-type RegisterData = z.infer<typeof registerSchema>;
+type LoginData = Pick<InsertUser, "username" | "password">;
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
   
+  // Basic user info query
   const {
     data: user,
     error,
     isLoading,
-  } = useQuery<SelectUser | null>({
+  } = useQuery<SelectUser | null, Error>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
+  });
+
+  // User with profile query (loads after user is loaded)
+  const {
+    data: userWithProfile,
+    isLoading: isProfileLoading,
+  } = useQuery<UserWithProfile | null, Error>({
+    queryKey: ["/api/user/profile"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+    enabled: !!user,
   });
 
   const loginMutation = useMutation({
@@ -57,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
-      setLocation("/");
+      queryClient.invalidateQueries({ queryKey: ["/api/user/profile"] });
       toast({
         title: "Login successful",
         description: `Welcome back, ${user.name}!`,
@@ -73,16 +69,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (userData: RegisterData) => {
-      const res = await apiRequest("POST", "/api/register", userData);
+    mutationFn: async (credentials: InsertUser) => {
+      const res = await apiRequest("POST", "/api/register", credentials);
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
-      setLocation("/");
       toast({
         title: "Registration successful",
-        description: `Welcome to CollabConnect, ${user.name}!`,
+        description: `Welcome, ${user.name}!`,
       });
     },
     onError: (error: Error) => {
@@ -100,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);
-      setLocation("/auth");
+      queryClient.setQueryData(["/api/user/profile"], null);
       toast({
         title: "Logged out",
         description: "You have been successfully logged out.",
@@ -119,7 +114,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user: user ?? null,
+        userWithProfile: userWithProfile ?? null,
         isLoading,
+        isProfileLoading,
         error,
         loginMutation,
         logoutMutation,

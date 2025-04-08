@@ -1,106 +1,100 @@
 import { users, influencerProfiles, brandProfiles, messages } from "@shared/schema";
-import type { User, InsertUser, InfluencerProfile, InsertInfluencerProfile, BrandProfile, InsertBrandProfile, Message, InsertMessage, InfluencerWithProfile, BrandWithProfile, UserRole } from "@shared/schema";
+import type {
+  User,
+  InsertUser,
+  InfluencerProfile,
+  InsertInfluencerProfile,
+  BrandProfile,
+  InsertBrandProfile,
+  Message,
+  InsertMessage,
+  UserWithProfile
+} from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
-import { v4 as uuidv4 } from "uuid";
 
 const MemoryStore = createMemoryStore(session);
 
+// Storage interface
 export interface IStorage {
-  // User operations
+  // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, data: Partial<User>): Promise<User | undefined>;
-  deleteUser(id: number): Promise<boolean>;
-  getAllUsers(): Promise<User[]>;
-  getAllUsersByRole(role: UserRole): Promise<User[]>;
+  listUsers(): Promise<User[]>;
   
-  // Influencer profile operations
+  // Influencer profile methods
   getInfluencerProfile(userId: number): Promise<InfluencerProfile | undefined>;
   createInfluencerProfile(profile: InsertInfluencerProfile): Promise<InfluencerProfile>;
-  updateInfluencerProfile(userId: number, data: Partial<InsertInfluencerProfile>): Promise<InfluencerProfile | undefined>;
-  getAllInfluencerProfiles(): Promise<InfluencerWithProfile[]>;
+  updateInfluencerProfile(userId: number, data: Partial<InfluencerProfile>): Promise<InfluencerProfile | undefined>;
+  listInfluencerProfiles(filters?: Partial<InfluencerProfile>): Promise<InfluencerProfile[]>;
   
-  // Brand profile operations
+  // Brand profile methods
   getBrandProfile(userId: number): Promise<BrandProfile | undefined>;
   createBrandProfile(profile: InsertBrandProfile): Promise<BrandProfile>;
-  updateBrandProfile(userId: number, data: Partial<InsertBrandProfile>): Promise<BrandProfile | undefined>;
-  getAllBrandProfiles(): Promise<BrandWithProfile[]>;
+  updateBrandProfile(userId: number, data: Partial<BrandProfile>): Promise<BrandProfile | undefined>;
+  listBrandProfiles(filters?: Partial<BrandProfile>): Promise<BrandProfile[]>;
   
-  // Message operations
-  getMessage(id: number): Promise<Message | undefined>;
+  // Message methods
   createMessage(message: InsertMessage): Promise<Message>;
-  getConversation(user1Id: number, user2Id: number): Promise<Message[]>;
-  getUserConversations(userId: number): Promise<{userId: number, lastMessage: Message, unreadCount: number}[]>;
-  markMessagesAsRead(senderId: number, receiverId: number): Promise<boolean>;
+  getMessagesBetweenUsers(user1Id: number, user2Id: number): Promise<Message[]>;
+  getUserConversations(userId: number): Promise<{userId: number, lastMessage: Message}[]>;
+  markMessagesAsRead(senderId: number, recipientId: number): Promise<void>;
   
-  // Search and filter operations
-  searchInfluencers(query: string): Promise<InfluencerWithProfile[]>;
-  filterInfluencers(filters: any): Promise<InfluencerWithProfile[]>;
-  searchBrands(query: string): Promise<BrandWithProfile[]>;
-  filterBrands(filters: any): Promise<BrandWithProfile[]>;
+  // Advanced methods
+  getUserWithProfile(userId: number): Promise<UserWithProfile | undefined>;
   
-  // Session store for authentication
+  // Session store
   sessionStore: session.SessionStore;
 }
 
+// In-memory storage implementation
 export class MemStorage implements IStorage {
   private usersData: Map<number, User>;
   private influencerProfilesData: Map<number, InfluencerProfile>;
   private brandProfilesData: Map<number, BrandProfile>;
   private messagesData: Map<number, Message>;
   sessionStore: session.SessionStore;
-  
-  private currentUserId: number;
-  private currentProfileId: number;
-  private currentMessageId: number;
+  private userId: number;
+  private influencerProfileId: number;
+  private brandProfileId: number;
+  private messageId: number;
 
   constructor() {
     this.usersData = new Map();
     this.influencerProfilesData = new Map();
     this.brandProfilesData = new Map();
     this.messagesData = new Map();
-    
-    this.currentUserId = 1;
-    this.currentProfileId = 1;
-    this.currentMessageId = 1;
-    
+    this.userId = 1;
+    this.influencerProfileId = 1;
+    this.brandProfileId = 1;
+    this.messageId = 1;
     this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000,
-    });
-    
-    // Create admin user
-    this.createUser({
-      username: "admin",
-      password: "$2b$10$dXiuz6c7LCaHzM9e9T57dO0KJAJLmvzKLnKcAhkynZD9Q1ICasgx.", // "adminpassword"
-      email: "admin@collabconnect.com",
-      role: UserRole.ADMIN,
-      name: "System Admin",
-      bio: "Platform administrator",
+      checkPeriod: 86400000
     });
   }
 
-  // User operations
+  // User methods
   async getUser(id: number): Promise<User | undefined> {
     return this.usersData.get(id);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.usersData.values()).find(user => 
-      user.username.toLowerCase() === username.toLowerCase()
+    return Array.from(this.usersData.values()).find(
+      (user) => user.username.toLowerCase() === username.toLowerCase(),
     );
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.usersData.values()).find(user => 
-      user.email.toLowerCase() === email.toLowerCase()
+    return Array.from(this.usersData.values()).find(
+      (user) => user.email.toLowerCase() === email.toLowerCase(),
     );
   }
 
   async createUser(userData: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
+    const id = this.userId++;
     const user: User = { ...userData, id, createdAt: new Date() };
     this.usersData.set(id, user);
     return user;
@@ -115,33 +109,25 @@ export class MemStorage implements IStorage {
     return updatedUser;
   }
 
-  async deleteUser(id: number): Promise<boolean> {
-    return this.usersData.delete(id);
-  }
-
-  async getAllUsers(): Promise<User[]> {
+  async listUsers(): Promise<User[]> {
     return Array.from(this.usersData.values());
   }
 
-  async getAllUsersByRole(role: UserRole): Promise<User[]> {
-    return Array.from(this.usersData.values()).filter(user => user.role === role);
-  }
-
-  // Influencer profile operations
+  // Influencer profile methods
   async getInfluencerProfile(userId: number): Promise<InfluencerProfile | undefined> {
     return Array.from(this.influencerProfilesData.values()).find(
-      profile => profile.userId === userId
+      (profile) => profile.userId === userId,
     );
   }
 
-  async createInfluencerProfile(profileData: InsertInfluencerProfile): Promise<InfluencerProfile> {
-    const id = this.currentProfileId++;
-    const profile: InfluencerProfile = { ...profileData, id };
-    this.influencerProfilesData.set(id, profile);
-    return profile;
+  async createInfluencerProfile(profile: InsertInfluencerProfile): Promise<InfluencerProfile> {
+    const id = this.influencerProfileId++;
+    const newProfile: InfluencerProfile = { ...profile, id, verified: false };
+    this.influencerProfilesData.set(id, newProfile);
+    return newProfile;
   }
 
-  async updateInfluencerProfile(userId: number, data: Partial<InsertInfluencerProfile>): Promise<InfluencerProfile | undefined> {
+  async updateInfluencerProfile(userId: number, data: Partial<InfluencerProfile>): Promise<InfluencerProfile | undefined> {
     const profile = await this.getInfluencerProfile(userId);
     if (!profile) return undefined;
     
@@ -150,34 +136,41 @@ export class MemStorage implements IStorage {
     return updatedProfile;
   }
 
-  async getAllInfluencerProfiles(): Promise<InfluencerWithProfile[]> {
-    const results: InfluencerWithProfile[] = [];
+  async listInfluencerProfiles(filters?: Partial<InfluencerProfile>): Promise<InfluencerProfile[]> {
+    let profiles = Array.from(this.influencerProfilesData.values());
     
-    for (const profile of this.influencerProfilesData.values()) {
-      const user = await this.getUser(profile.userId);
-      if (user) {
-        results.push({ ...user, profile });
-      }
+    if (filters) {
+      profiles = profiles.filter(profile => {
+        return Object.entries(filters).every(([key, value]) => {
+          if (key === 'category' && value) {
+            return profile.category === value;
+          }
+          if (key === 'location' && value) {
+            return profile.location === value;
+          }
+          return true;
+        });
+      });
     }
     
-    return results;
+    return profiles;
   }
 
-  // Brand profile operations
+  // Brand profile methods
   async getBrandProfile(userId: number): Promise<BrandProfile | undefined> {
     return Array.from(this.brandProfilesData.values()).find(
-      profile => profile.userId === userId
+      (profile) => profile.userId === userId,
     );
   }
 
-  async createBrandProfile(profileData: InsertBrandProfile): Promise<BrandProfile> {
-    const id = this.currentProfileId++;
-    const profile: BrandProfile = { ...profileData, id };
-    this.brandProfilesData.set(id, profile);
-    return profile;
+  async createBrandProfile(profile: InsertBrandProfile): Promise<BrandProfile> {
+    const id = this.brandProfileId++;
+    const newProfile: BrandProfile = { ...profile, id, verified: false };
+    this.brandProfilesData.set(id, newProfile);
+    return newProfile;
   }
 
-  async updateBrandProfile(userId: number, data: Partial<InsertBrandProfile>): Promise<BrandProfile | undefined> {
+  async updateBrandProfile(userId: number, data: Partial<BrandProfile>): Promise<BrandProfile | undefined> {
     const profile = await this.getBrandProfile(userId);
     if (!profile) return undefined;
     
@@ -186,186 +179,88 @@ export class MemStorage implements IStorage {
     return updatedProfile;
   }
 
-  async getAllBrandProfiles(): Promise<BrandWithProfile[]> {
-    const results: BrandWithProfile[] = [];
+  async listBrandProfiles(filters?: Partial<BrandProfile>): Promise<BrandProfile[]> {
+    let profiles = Array.from(this.brandProfilesData.values());
     
-    for (const profile of this.brandProfilesData.values()) {
-      const user = await this.getUser(profile.userId);
-      if (user) {
-        results.push({ ...user, profile });
-      }
+    if (filters) {
+      profiles = profiles.filter(profile => {
+        return Object.entries(filters).every(([key, value]) => {
+          if (key === 'industry' && value) {
+            return profile.industry === value;
+          }
+          if (key === 'location' && value) {
+            return profile.location === value;
+          }
+          return true;
+        });
+      });
     }
     
-    return results;
+    return profiles;
   }
 
-  // Message operations
-  async getMessage(id: number): Promise<Message | undefined> {
-    return this.messagesData.get(id);
+  // Message methods
+  async createMessage(message: InsertMessage): Promise<Message> {
+    const id = this.messageId++;
+    const newMessage: Message = { ...message, id, read: false, createdAt: new Date() };
+    this.messagesData.set(id, newMessage);
+    return newMessage;
   }
 
-  async createMessage(messageData: InsertMessage): Promise<Message> {
-    const id = this.currentMessageId++;
-    const message: Message = { ...messageData, id, createdAt: new Date() };
-    this.messagesData.set(id, message);
-    return message;
-  }
-
-  async getConversation(user1Id: number, user2Id: number): Promise<Message[]> {
+  async getMessagesBetweenUsers(user1Id: number, user2Id: number): Promise<Message[]> {
     return Array.from(this.messagesData.values())
-      .filter(message => 
-        (message.senderId === user1Id && message.receiverId === user2Id) ||
-        (message.senderId === user2Id && message.receiverId === user1Id)
+      .filter(
+        (message) =>
+          (message.senderId === user1Id && message.recipientId === user2Id) ||
+          (message.senderId === user2Id && message.recipientId === user1Id),
       )
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
-  async getUserConversations(userId: number): Promise<{userId: number, lastMessage: Message, unreadCount: number}[]> {
-    // Get all messages where the user is either sender or receiver
-    const userMessages = Array.from(this.messagesData.values())
-      .filter(message => 
-        message.senderId === userId || message.receiverId === userId
-      );
+  async getUserConversations(userId: number): Promise<{userId: number, lastMessage: Message}[]> {
+    const allMessages = Array.from(this.messagesData.values())
+      .filter(message => message.senderId === userId || message.recipientId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    const conversations = new Map<number, Message>();
     
-    // Get unique conversation partners
-    const partnerIds = new Set<number>();
-    userMessages.forEach(message => {
-      if (message.senderId === userId) {
-        partnerIds.add(message.receiverId);
-      } else {
-        partnerIds.add(message.senderId);
-      }
-    });
-    
-    // Build conversation summaries
-    const conversations = [];
-    
-    for (const partnerId of partnerIds) {
-      // Get all messages between the user and this partner
-      const conversationMessages = userMessages.filter(message => 
-        (message.senderId === userId && message.receiverId === partnerId) ||
-        (message.senderId === partnerId && message.receiverId === userId)
-      );
+    for (const message of allMessages) {
+      const otherUserId = message.senderId === userId ? message.recipientId : message.senderId;
       
-      // Sort by creation time (descending) to get the latest message first
-      conversationMessages.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      
-      // Count unread messages sent to the user
-      const unreadCount = conversationMessages.filter(message => 
-        message.senderId === partnerId && message.receiverId === userId && !message.read
-      ).length;
-      
-      if (conversationMessages.length > 0) {
-        conversations.push({
-          userId: partnerId,
-          lastMessage: conversationMessages[0],
-          unreadCount
-        });
+      if (!conversations.has(otherUserId)) {
+        conversations.set(otherUserId, message);
       }
     }
     
-    // Sort conversations by the timestamp of the last message (most recent first)
-    return conversations.sort((a, b) => 
-      b.lastMessage.createdAt.getTime() - a.lastMessage.createdAt.getTime()
-    );
+    return Array.from(conversations.entries()).map(([userId, lastMessage]) => ({
+      userId,
+      lastMessage
+    }));
   }
 
-  async markMessagesAsRead(senderId: number, receiverId: number): Promise<boolean> {
-    let updated = false;
+  async markMessagesAsRead(senderId: number, recipientId: number): Promise<void> {
+    const messages = Array.from(this.messagesData.values())
+      .filter(message => message.senderId === senderId && message.recipientId === recipientId && !message.read);
     
-    for (const [id, message] of this.messagesData.entries()) {
-      if (message.senderId === senderId && message.receiverId === receiverId && !message.read) {
-        message.read = true;
-        this.messagesData.set(id, message);
-        updated = true;
-      }
+    for (const message of messages) {
+      const updatedMessage = { ...message, read: true };
+      this.messagesData.set(message.id, updatedMessage);
     }
-    
-    return updated;
   }
 
-  // Search and filter operations
-  async searchInfluencers(query: string): Promise<InfluencerWithProfile[]> {
-    const allProfiles = await this.getAllInfluencerProfiles();
-    
-    if (!query) return allProfiles;
-    
-    const searchTerm = query.toLowerCase();
-    return allProfiles.filter(influencer => 
-      influencer.name.toLowerCase().includes(searchTerm) ||
-      influencer.profile.category.toLowerCase().includes(searchTerm) ||
-      (influencer.bio && influencer.bio.toLowerCase().includes(searchTerm))
-    );
-  }
+  // Advanced methods
+  async getUserWithProfile(userId: number): Promise<UserWithProfile | undefined> {
+    const user = await this.getUser(userId);
+    if (!user) return undefined;
 
-  async filterInfluencers(filters: any): Promise<InfluencerWithProfile[]> {
-    let results = await this.getAllInfluencerProfiles();
-    
-    if (filters.category) {
-      results = results.filter(influencer => 
-        influencer.profile.category.toLowerCase() === filters.category.toLowerCase()
-      );
-    }
-    
-    if (filters.platforms && filters.platforms.length > 0) {
-      results = results.filter(influencer => {
-        const influencerPlatforms = influencer.profile.platforms as string[];
-        return filters.platforms.some((p: string) => 
-          influencerPlatforms.includes(p)
-        );
-      });
-    }
-    
-    if (filters.minFollowers) {
-      results = results.filter(influencer => 
-        (influencer.profile.followerCount || 0) >= filters.minFollowers
-      );
-    }
-    
-    if (filters.maxFollowers) {
-      results = results.filter(influencer => 
-        (influencer.profile.followerCount || 0) <= filters.maxFollowers
-      );
-    }
-    
-    return results;
-  }
+    const influencerProfile = await this.getInfluencerProfile(userId);
+    const brandProfile = await this.getBrandProfile(userId);
 
-  async searchBrands(query: string): Promise<BrandWithProfile[]> {
-    const allProfiles = await this.getAllBrandProfiles();
-    
-    if (!query) return allProfiles;
-    
-    const searchTerm = query.toLowerCase();
-    return allProfiles.filter(brand => 
-      brand.name.toLowerCase().includes(searchTerm) ||
-      brand.profile.industry.toLowerCase().includes(searchTerm) ||
-      (brand.bio && brand.bio.toLowerCase().includes(searchTerm))
-    );
-  }
-
-  async filterBrands(filters: any): Promise<BrandWithProfile[]> {
-    let results = await this.getAllBrandProfiles();
-    
-    if (filters.industry) {
-      results = results.filter(brand => 
-        brand.profile.industry.toLowerCase() === filters.industry.toLowerCase()
-      );
-    }
-    
-    if (filters.companyType) {
-      results = results.filter(brand => 
-        brand.profile.companyType.toLowerCase() === filters.companyType.toLowerCase()
-      );
-    }
-    
-    if (filters.budget) {
-      results = results.filter(brand => 
-        brand.profile.budget && brand.profile.budget.toLowerCase().includes(filters.budget.toLowerCase())
-      );
-    }
-    
-    return results;
+    return {
+      ...user,
+      influencerProfile,
+      brandProfile
+    };
   }
 }
 

@@ -5,8 +5,7 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser, insertUserSchema, UserRole } from "@shared/schema";
-import { z } from "zod";
+import { User as SelectUser, UserRole } from "@shared/schema";
 
 declare global {
   namespace Express {
@@ -31,12 +30,12 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "collabconnect-secret",
+    secret: process.env.SESSION_SECRET || "influencer-brand-collaboration-secret",
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     }
   };
 
@@ -47,93 +46,60 @@ export function setupAuth(app: Express) {
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
-      try {
-        const user = await storage.getUserByUsername(username);
-        if (!user || !(await comparePasswords(password, user.password))) {
-          return done(null, false);
-        } else {
-          return done(null, user);
-        }
-      } catch (error) {
-        return done(error);
+      const user = await storage.getUserByUsername(username);
+      if (!user || !(await comparePasswords(password, user.password))) {
+        return done(null, false);
+      } else {
+        return done(null, user);
       }
     }),
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id: number, done) => {
-    try {
-      const user = await storage.getUser(id);
-      done(null, user);
-    } catch (error) {
-      done(error);
-    }
-  });
-
-  // Extended schema with validation
-  const registerSchema = insertUserSchema.extend({
-    confirmPassword: z.string(),
-    role: z.nativeEnum(UserRole)
-  }).refine(data => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"]
+    const user = await storage.getUser(id);
+    done(null, user);
   });
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      // Validate the request body
-      const validatedData = registerSchema.parse(req.body);
+      const { username, email, role } = req.body;
       
+      // Validate role
+      if (![UserRole.INFLUENCER, UserRole.BRAND].includes(role)) {
+        return res.status(400).json({ message: "Invalid role. Must be 'influencer' or 'brand'." });
+      }
+
       // Check if username already exists
-      const existingUserByUsername = await storage.getUserByUsername(validatedData.username);
-      if (existingUserByUsername) {
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
         return res.status(400).json({ message: "Username already exists" });
       }
-      
+
       // Check if email already exists
-      const existingUserByEmail = await storage.getUserByEmail(validatedData.email);
-      if (existingUserByEmail) {
+      const existingEmail = await storage.getUserByEmail(email);
+      if (existingEmail) {
         return res.status(400).json({ message: "Email already exists" });
       }
-      
+
       // Create the user with hashed password
-      const { confirmPassword, ...userData } = validatedData;
       const user = await storage.createUser({
-        ...userData,
-        password: await hashPassword(userData.password),
+        ...req.body,
+        password: await hashPassword(req.body.password),
       });
 
       // Log the user in
       req.login(user, (err) => {
         if (err) return next(err);
-        
-        // Remove password before sending response
-        const { password, ...safeUser } = user;
-        res.status(201).json(safeUser);
+        res.status(201).json(user);
       });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
       next(error);
     }
   });
 
-  app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
-      if (err) return next(err);
-      if (!user) {
-        return res.status(401).json({ message: "Invalid username or password" });
-      }
-      
-      req.login(user, (err) => {
-        if (err) return next(err);
-        
-        // Remove password before sending response
-        const { password, ...safeUser } = user;
-        return res.status(200).json(safeUser);
-      });
-    })(req, res, next);
+  app.post("/api/login", passport.authenticate("local"), (req, res) => {
+    res.status(200).json(req.user);
   });
 
   app.post("/api/logout", (req, res, next) => {
@@ -145,9 +111,18 @@ export function setupAuth(app: Express) {
 
   app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
+    res.json(req.user);
+  });
+
+  app.get("/api/user/profile", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
     
-    // Remove password before sending
-    const { password, ...safeUser } = req.user;
-    res.json(safeUser);
+    try {
+      const userWithProfile = await storage.getUserWithProfile(req.user.id);
+      res.json(userWithProfile);
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      res.status(500).json({ message: "Failed to fetch user profile" });
+    }
   });
 }
